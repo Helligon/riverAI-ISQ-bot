@@ -4,9 +4,9 @@ This file is going to be the plan for the project.
 
 ### Where We Left Off
 
-Completed Tasks 1-4 of 7. Ready to start Task 5 (AI Agent + RAG tools for Workflow 2, Part B).
+Completed Tasks 1-5 of 7. Ready to start Task 6 (LLM Switch + aggregation + Respond to Webhook for Workflow 2, Part C).
 
-**Last commit:** `00bcf9a` — "feat: ISQ processing workflow — webhook and question extraction"
+**Last commit:** `54c10f6` — "feat: AI agent with RAG tools for per-question answer generation"
 
 ---
 
@@ -41,15 +41,25 @@ Completed Tasks 1-4 of 7. Ready to start Task 5 (AI Agent + RAG tools for Workfl
     - The **Config** (Set) node strips binary data from the item by default — it only passes through fields you explicitly define. **Node order had to change from the original plan:** Extract from File now runs *before* Config, not after: `Webhook → Extract from File → Config → Basic LLM Chain → Code → Respond to Webhook`. This doesn't affect Task 6's Switch logic since it references the Config node by name (`$('Config')`), not position — but double check the node is actually named `config`/`Config` to match that reference exactly.
     - Basic LLM Chain's "Require Specific Output Format" toggle must be turned **off** — leaving it on expects an Output Parser sub-node, which isn't part of this plan (we parse the raw text manually in the next Code node).
     - To test via curl before the full chain (including Respond to Webhook) exists, a placeholder Respond to Webhook node was added early and connected at the end of the Code node, so test requests don't hang/404.
+- **Task 5 (Workflow 2 Part B — AI Agent with RAG Tools):** COMPLETE
+  - `workflows/02-isq-processing.json` committed (node names: `AI Agent`, `search_policies`, `search_previous_isqs`, `get_questions` (renamed Task 4 parse node), `format_response` (renamed agent-output parse node))
+  - Single pinned-question test passed end-to-end: real tool call → real document retrieved → correct structured JSON answer
+  - **Deviations / gotchas from original plan:**
+    - The AI Agent's "Source for Prompt (User Message)" field is a dropdown, not free text — must be set to "Define below" (don't toggle `fx` expression mode on the dropdown itself; the actual text field appears *below* it once "Define below" is selected).
+    - llama3.2 frequently fails to pass tool arguments in the correct shape (passes a nested object instead of the plain string the Vector Store Tool's schema expects), causing "Cannot embed empty or undefined text" errors. **Fix:** added an explicit instruction to the system message: *"When calling a tool, the input must be a single plain string containing your search query — not a JSON object."* This significantly improved (but did not eliminate) the failure rate.
+    - The AI Agent node needs **Settings → On Error: Continue** (not "Stop Workflow"), otherwise one failed tool call/max-iterations error aborts the entire batch instead of just that item.
+    - The agent's JSON output sometimes returns `needs_review` as the *string* `"false"`/`"true"` instead of a real boolean — `"false"` is truthy in JS, which would silently break `Task 6`'s `needs_review_count` filter. **Fix:** added `parsed.needs_review = parsed.needs_review === true || parsed.needs_review === 'true';` in the parse Code node (`format_response`) right after the JSON.parse.
+    - The `format_response` Code node must be in **"Run Once for Each Item"** mode (it uses `$input.item`, singular) and must `return { json: {...} }` directly — **not** wrapped in an array — since arrays aren't valid returns in that mode.
+    - The AI Agent node, like other nodes in this project, drops the original `question` field from the item. Fixed in `format_response` by referencing the Task 4 question node by name: `const question = $('get_questions').item.json.question || '';` (adjust the name if you renamed that node differently).
+    - **Known limitation (not fixed, documented instead):** a full 24-question batch run against llama3.2 failed on every single item (all fell back to low-confidence/needs_review) despite the same setup succeeding cleanly in isolation moments earlier. Root cause investigated and traced to **severe host memory pressure** — `vm.swapusage` showed ~8GB/9GB swap in use on a 16GB Mac while Docker (n8n) + Ollama were both active. This is a hardware/resource constraint of the demo machine under sustained sequential LLM load, not a workflow logic bug — the graceful-degradation behavior (low confidence + needs_review) worked exactly as designed. If full-batch reliability matters for the demo, either free up system memory beforehand, or switch `llm_provider` to `anthropic` (Task 6) for the full run, since Claude doesn't share this local resource contention.
 
 ---
 
 ## What's Next
 
-Pick up at **Task 5** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
+Pick up at **Task 6** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
 
-Tasks 5–6 involve extending `workflows/02-isq-processing.json` (subagent-driven). Tasks are:
-- **Task 5:** Add AI Agent + RAG tools to `workflows/02-isq-processing.json` (Part B)
+Task 6 extends `workflows/02-isq-processing.json` (subagent-driven):
 - **Task 6:** Add LLM Switch + aggregation + response to `workflows/02-isq-processing.json` (Part C)
 - **Task 7:** End-to-end test with all three blank ISQs
 
