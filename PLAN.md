@@ -4,9 +4,9 @@ This file is going to be the plan for the project.
 
 ### Where We Left Off
 
-Completed Tasks 1, 2, and 3 of 7. Ready to start Task 4 (Workflow 2 Part A — webhook + question extraction).
+Completed Tasks 1-4 of 7. Ready to start Task 5 (AI Agent + RAG tools for Workflow 2, Part B).
 
-**Last commit:** `98b6de4` — "feat: knowledge ingestion workflow"
+**Last commit:** `00bcf9a` — "feat: ISQ processing workflow — webhook and question extraction"
 
 ---
 
@@ -32,15 +32,23 @@ Completed Tasks 1, 2, and 3 of 7. Ready to start Task 4 (Workflow 2 Part A — w
     - "Read/Write Files from Disk" and both "Extract from File" operations drop the original JSON fields (`type`, `path`), keeping only file/extracted-content fields. Added two Code nodes to reattach them: "remap type and path" (right after Read/Write Files, references the first Code node by name) and "remap type and path 2" (right after Merge — rebuilds the original pdf-then-txt item order to re-zip `type`/`path` back on, and normalizes the text field since the txt extraction operation outputs `data` instead of `text`).
     - The "Simple Vector Store" node's text splitter is not a direct sub-node — added an **AI → Document Loaders → "Default Data Loader"** node (Mode: "Load Specific Data", JSON Data: `{{ $json.text }}`, Text Splitting: Custom) between the Switch outputs and each vector store, with the Recursive Character Text Splitter (500/50) feeding into the Default Data Loader rather than the vector store directly.
   - Vector store names ended up as `policy_store` / `isq_store` (not `policies-store` / `isqs-store` as originally planned) — **note this when building Task 5/6's Vector Store Tool retrieval nodes, they must reference these exact names.**
+- **Task 4 (Workflow 2 Part A — Webhook + Question Extraction):** COMPLETE
+  - `workflows/02-isq-processing.json` committed
+  - Built and tested in n8n UI — webhook → Extract from File → Config → Basic LLM Chain (Ollama llama3.2) → Code (parse questions) → Respond to Webhook (placeholder, full config in Task 6)
+  - Test result: 24 items extracted from the Sunflowers Charity ISQ, each with a populated `question` field (close enough to the plan's expected ~20 — exact count varies by document/LLM run)
+  - **Deviations from original plan:**
+    - n8n's Webhook node names uploaded multipart file fields with a numeric suffix (e.g. `data0`, not `data`) even for a single file — Extract from File's **Input Binary Field** must be set to `data0`.
+    - The **Config** (Set) node strips binary data from the item by default — it only passes through fields you explicitly define. **Node order had to change from the original plan:** Extract from File now runs *before* Config, not after: `Webhook → Extract from File → Config → Basic LLM Chain → Code → Respond to Webhook`. This doesn't affect Task 6's Switch logic since it references the Config node by name (`$('Config')`), not position — but double check the node is actually named `config`/`Config` to match that reference exactly.
+    - Basic LLM Chain's "Require Specific Output Format" toggle must be turned **off** — leaving it on expects an Output Parser sub-node, which isn't part of this plan (we parse the raw text manually in the next Code node).
+    - To test via curl before the full chain (including Respond to Webhook) exists, a placeholder Respond to Webhook node was added early and connected at the end of the Code node, so test requests don't hang/404.
 
 ---
 
 ## What's Next
 
-Pick up at **Task 4** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
+Pick up at **Task 5** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
 
-Tasks 4–6 involve generating n8n workflow JSON files (subagent-driven). Tasks are:
-- **Task 4:** Generate `workflows/02-isq-processing.json` (Part A — webhook + question extraction)
+Tasks 5–6 involve extending `workflows/02-isq-processing.json` (subagent-driven). Tasks are:
 - **Task 5:** Add AI Agent + RAG tools to `workflows/02-isq-processing.json` (Part B)
 - **Task 6:** Add LLM Switch + aggregation + response to `workflows/02-isq-processing.json` (Part C)
 - **Task 7:** End-to-end test with all three blank ISQs
