@@ -1,12 +1,12 @@
-This file is going to be the plan for the project. I want to work from the brief in the file: AI Engineer Technical Challenge.pdf
+This file is going to be the plan for the project.
 
-## Status: In Progress (paused 2026-06-17)
+## Status: In Progress (paused 2026-06-18)
 
 ### Where We Left Off
 
-Completed Tasks 1 and 2 of 7. Ready to start Task 3 (generating Workflow 1 JSON).
+Completed Tasks 1, 2, and 3 of 7. Ready to start Task 4 (Workflow 2 Part A — webhook + question extraction).
 
-**Last commit:** `78db084` — "chore: environment setup scripts"
+**Last commit:** `98b6de4` — "feat: knowledge ingestion workflow"
 
 ---
 
@@ -22,15 +22,24 @@ Completed Tasks 1 and 2 of 7. Ready to start Task 3 (generating Workflow 1 JSON)
 - **Task 2 (n8n Credentials):** COMPLETE
   - Credential `Ollama Local` added in n8n UI
   - Base URL: `http://host.docker.internal:11434`
+- **Task 3 (Workflow 1 — Knowledge Ingestion):** COMPLETE
+  - `workflows/01-knowledge-ingestion.json` committed
+  - Built and tested in n8n UI — all nodes green, 55 chunks inserted into `policy_store`, 25 chunks into `isq_store`
+  - **Deviations from original plan (see below for why):**
+    - n8n's "Read/Write Files from Disk" node only allows access to `/home/node/.n8n-files` by default (not `/home/node/.n8n/files`) — created a new host directory `~/.n8n-files` and mounted it into the container alongside `~/.n8n`. Restart command is now: `docker run -d -p 5678:5678 -v ~/.n8n:/home/node/.n8n -v ~/.n8n-files:/home/node/.n8n-files n8nio/n8n`
+    - `Northstar_Labs_Previous_ISQ_Completed_02.docx` couldn't be parsed by n8n's "Extract from File" node (no DOCX operation). Converted it to `.txt` on the host with `textutil -convert txt` and pointed the Code node's path at the `.txt` version instead.
+    - Because PDFs and the one `.txt` file need different "Extract from File" operations, added an **IF node** ("If txt file": `{{ $json.path.endsWith('.txt') }}`) to branch into two Extract from File nodes ("Extract from txt files" / "Extract from pdf files"), recombined with a **Merge** node (Append mode).
+    - "Read/Write Files from Disk" and both "Extract from File" operations drop the original JSON fields (`type`, `path`), keeping only file/extracted-content fields. Added two Code nodes to reattach them: "remap type and path" (right after Read/Write Files, references the first Code node by name) and "remap type and path 2" (right after Merge — rebuilds the original pdf-then-txt item order to re-zip `type`/`path` back on, and normalizes the text field since the txt extraction operation outputs `data` instead of `text`).
+    - The "Simple Vector Store" node's text splitter is not a direct sub-node — added an **AI → Document Loaders → "Default Data Loader"** node (Mode: "Load Specific Data", JSON Data: `{{ $json.text }}`, Text Splitting: Custom) between the Switch outputs and each vector store, with the Recursive Character Text Splitter (500/50) feeding into the Default Data Loader rather than the vector store directly.
+  - Vector store names ended up as `policy_store` / `isq_store` (not `policies-store` / `isqs-store` as originally planned) — **note this when building Task 5/6's Vector Store Tool retrieval nodes, they must reference these exact names.**
 
 ---
 
 ## What's Next
 
-Pick up at **Task 3** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
+Pick up at **Task 4** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
 
-Tasks 3–6 involve generating n8n workflow JSON files (subagent-driven). Tasks are:
-- **Task 3:** Generate `workflows/01-knowledge-ingestion.json`
+Tasks 4–6 involve generating n8n workflow JSON files (subagent-driven). Tasks are:
 - **Task 4:** Generate `workflows/02-isq-processing.json` (Part A — webhook + question extraction)
 - **Task 5:** Add AI Agent + RAG tools to `workflows/02-isq-processing.json` (Part B)
 - **Task 6:** Add LLM Switch + aggregation + response to `workflows/02-isq-processing.json` (Part C)
@@ -41,17 +50,18 @@ Tasks 3–6 involve generating n8n workflow JSON files (subagent-driven). Tasks 
 ## Environment Setup (to restart tomorrow)
 
 1. **Start Docker Desktop** (open the app, wait for whale icon in menu bar)
-2. **Start n8n:**
+2. **Start n8n** (now mounts two volumes — `~/.n8n` for config/credentials, `~/.n8n-files` for documents read by the "Read/Write Files from Disk" node, which only allows access under `/home/node/.n8n-files`):
    ```bash
-   docker run -it --rm -p 5678:5678 -v ~/.n8n:/home/node/.n8n n8nio/n8n
+   docker run -d -p 5678:5678 -v ~/.n8n:/home/node/.n8n -v ~/.n8n-files:/home/node/.n8n-files n8nio/n8n
    ```
 3. **Start Ollama:**
    ```bash
    ollama serve
    ```
 4. **n8n UI:** http://localhost:5678
-5. **Knowledge docs** are already copied to `~/.n8n/files/knowledge/` — no need to re-run the setup script unless Docker was wiped
+5. **Knowledge docs** are already copied to `~/.n8n-files/knowledge/` (note: `.n8n-files`, not `.n8n/files`) — no need to re-run the setup script unless Docker was wiped. One file, `Northstar_Labs_Previous_ISQ_Completed_02.docx`, was converted to `.txt` since n8n can't extract DOCX directly — both the `.docx` and `.txt` versions are in `~/.n8n-files/knowledge/isqs/`, but the workflow points at the `.txt` one.
 6. **n8n Credential** `Ollama Local` is already configured (persists in `~/.n8n/`)
+7. **Re-run Workflow 1 ("ISQ - Knowledge Ingest")** after every n8n restart — the in-memory vector stores (`policy_store`, `isq_store`) are cleared when the container restarts.
 
 ---
 
