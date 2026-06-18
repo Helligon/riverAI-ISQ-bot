@@ -22,19 +22,6 @@
     },
     {
       "parameters": {
-        "options": {}
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [
-        1344,
-        0
-      ],
-      "id": "ff57e170-7b6b-4607-bb11-a2ac7056c703",
-      "name": "Respond to Webhook"
-    },
-    {
-      "parameters": {
         "assignments": {
           "assignments": [
             {
@@ -93,11 +80,143 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
       "position": [
-        832,
-        160
+        896,
+        240
       ],
       "id": "267bdd19-0373-4f85-8b29-a320d1d82e1d",
       "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "RwCDW0hKt5d5Ty39",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "options": {
+          "systemMessage": "You are completing a supplier information security questionnaire on behalf of Northstar Labs, a UK-based software development and AI solutions company (48 employees, headquartered in Manchester,\nUK). Primary hosting provider: Microsoft Azure.\n\nFor each question, use your tools to search the knowledge base before answering:\n- Use \"search_policies\" to search Northstar Labs' official policy documents\n- Use \"search_previous_isqs\" to search how similar questions were answered before\n\nRules:\n1. Always search before answering — do not guess\n2. When calling a tool, the input must be a single plain string containing your search query — not a JSON object. For example, call search_policies with the string \"information security policy\", not {\"query\": \"information security policy\"}.\n3. Prefer policy documents over previous ISQ responses\n4. Be concise and professional — this is a client/vendor security questionnaire\n5. Never state facts not found in the retrieved documents\n6. If retrieved content is insufficient, say so clearly\n\n  Respond with ONLY a valid JSON object. No markdown, no explanation outside the JSON:\n  {\n    \"answer\": \"<professional answer, 1-3 sentences>\",\n    \"confidence\": \"<high|medium|low>\",\n    \"needs_review\": <true|false>,\n    \"reason\": \"<why needs_review is true, or null>\",\n    \"sources\": [\"<document filename>\"]\n  }\n\n  Confidence levels:\n  - high: direct policy statement found, optionally confirmed in a previous ISQ\n  - medium: relevant context found but indirect or partial\n  - low: little or no evidence found — set needs_review to true and explain in reason"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "87899be6-4369-4c4e-94a7-996638e379dd",
+      "name": "AI Agent",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "description": "Search Northstar Labs official policy documents including the Information Security Policy, Secure Software Development Policy, Acceptable Use Policy, Business Continuity and Disaster Recovery Policy, Incident Response Policy, and Data Protection Policy. Use this to find authoritative policy statements."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        208
+      ],
+      "id": "cb13c51e-b502-4740-a031-46a84d2dd017",
+      "name": "search_policies"
+    },
+    {
+      "parameters": {
+        "memoryKey": {
+          "__rl": true,
+          "value": "policy_store",
+          "mode": "list",
+          "cachedResultName": "policy_store"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        1056,
+        368
+      ],
+      "id": "3d82f72a-3669-4311-8bb6-64391671ee47",
+      "name": "policy_store"
+    },
+    {
+      "parameters": {
+        "description": "Search Northstar Labs' previous completed supplier security questionnaire responses. Use this to find how similar questions have been answered in past submissions."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1.1,
+      "position": [
+        1504,
+        208
+      ],
+      "id": "7f84d63a-419b-4725-91b4-ca9626ed07ea",
+      "name": "search_previous_isqs"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1904,
+        0
+      ],
+      "id": "1a049785-f17d-462c-b1d5-405d83ba6ce1",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "memoryKey": {
+          "__rl": true,
+          "value": "isq_store",
+          "mode": "list",
+          "cachedResultName": "isq_store"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        1456,
+        352
+      ],
+      "id": "2bc06477-e69a-4252-a67e-0cc569e48e5d",
+      "name": "isq_store"
+    },
+    {
+      "parameters": {
+        "model": "nomic-embed-text:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        576
+      ],
+      "id": "ecc93d8f-c5ac-442f-9c0f-828918308ca5",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "RwCDW0hKt5d5Ty39",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmOllama",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        368
+      ],
+      "id": "d94c8a37-5ec8-4bb7-918d-596013cb2519",
+      "name": "Ollama Model",
       "credentials": {
         "ollamaApi": {
           "id": "RwCDW0hKt5d5Ty39",
@@ -116,7 +235,21 @@
         0
       ],
       "id": "5a44ef94-45df-4d40-b6e2-02e1c13c8344",
-      "name": "Code in JavaScript"
+      "name": "get_questions"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const agentOutput = $input.item.json.output || '';\nconst question = $('get_questions').item.json.question || '';\n\n// Strip markdown fences if the model added them\nconst cleaned = agentOutput.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsed;\ntry {\n  // Find first {...} block in case the model added preamble\n  const match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(match ? match[0] : cleaned);\n  parsed.needs_review = parsed.needs_review === true || parsed.needs_review === 'true';\n} catch (e) {\n  // Parsing failed — return low-confidence fallback so the workflow doesn't break\n  parsed = {\n    answer: agentOutput,\n    confidence: 'low',\n    needs_review: true,\n    reason: 'Agent output could not be parsed as structured JSON — manual review required.',\n    sources: []\n  };\n}\n\nreturn { json: { question, ...parsed } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        0
+      ],
+      "id": "0c09928d-e56b-490c-a4d5-f5d1aaae9d73",
+      "name": "format_response"
     }
   ],
   "pinData": {},
@@ -130,11 +263,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "Respond to Webhook": {
-      "main": [
-        []
       ]
     },
     "config": {
@@ -166,6 +294,11 @@
             "node": "Basic LLM Chain",
             "type": "ai_languageModel",
             "index": 0
+          },
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
           }
         ]
       ]
@@ -174,14 +307,117 @@
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "get_questions",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript": {
+    "search_policies": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "policy_store": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "search_policies",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_previous_isqs": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "format_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "isq_store": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "search_previous_isqs",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "isq_store",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "policy_store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "search_policies",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "search_previous_isqs",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "get_questions": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format_response": {
       "main": [
         [
           {
@@ -199,7 +435,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "d9d63c13-0f39-47ed-8ab5-14c4d05d6e1b",
+  "versionId": "3e3f555f-4970-40a6-a220-d859e7e89e2f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "92abea64a555bcee1d3b9086d5f7c8214960087d9308769d060a18d9f354d4c3"
