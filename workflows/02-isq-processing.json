@@ -1,0 +1,210 @@
+{
+  "name": "isq - processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "isq",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        192,
+        0
+      ],
+      "id": "7e8d0d5a-e56a-4516-9b55-c1c8d20b6772",
+      "name": "Webhook",
+      "webhookId": "cce77cf7-dafd-437a-8729-f267f978ab6d"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "ff57e170-7b6b-4607-bb11-a2ac7056c703",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e735e52f-a444-4d94-a426-287add4a0cb1",
+              "name": "llm_provider",
+              "value": "ollama",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "aed6498f-7d2c-4fb1-a611-fa5558b5616b",
+      "name": "config"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "5fef7bf6-bd9d-4e12-98d8-ba38f2d12c8c",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are processing an Information Security Questionnaire (ISQ).\n\nExtract every question from the document text below. Return ONLY a valid JSON array of strings. Each string is one complete question as it appears in the document. Do not include section headers, field labels, or instructions — only the questions.\n\nExample format:\n[\"Do you maintain a formal information security policy?\", \"Is MFA enforced for all staff?\"]\n\nReturn only the JSON array. No explanation, no markdown.\n\nDocument text:\n{{ $json.text }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        832,
+        0
+      ],
+      "id": "0b9dfdea-f5bb-4cc8-8ddc-47ec36faa10e",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        832,
+        160
+      ],
+      "id": "267bdd19-0373-4f85-8b29-a320d1d82e1d",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "RwCDW0hKt5d5Ty39",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawOutput = $input.first().json.output || $input.first().json.text || '';\n\n// Strip markdown code fences if the model wrapped the output\nconst cleaned = rawOutput.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet questions;\ntry {\n  questions = JSON.parse(cleaned);\n} catch (e) {\n  // Fallback: extract the first [...] block\n  const match = cleaned.match(/\\[[\\s\\S]*\\]/);\n  if (match) {\n    questions = JSON.parse(match[0]);\n  } else {\n    throw new Error(`Could not parse questions from LLM output: ${rawOutput}`);\n  }\n}\n\nif (!Array.isArray(questions) || questions.length === 0) {\n  throw new Error(`Expected array of questions, got: ${JSON.stringify(questions)}`);\n}\n\nreturn questions.map(q => ({ json: { question: String(q) } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        0
+      ],
+      "id": "5a44ef94-45df-4d40-b6e2-02e1c13c8344",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "config": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d9d63c13-0f39-47ed-8ab5-14c4d05d6e1b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "92abea64a555bcee1d3b9086d5f7c8214960087d9308769d060a18d9f354d4c3"
+  },
+  "nodeGroups": [],
+  "id": "D9ymbHKughdrpOKf",
+  "tags": []
+}
