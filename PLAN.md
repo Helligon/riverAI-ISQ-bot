@@ -1,12 +1,12 @@
 This file is going to be the plan for the project.
 
-## Status: In Progress (paused 2026-06-18)
+## Status: In Progress (paused 2026-06-19)
 
 ### Where We Left Off
 
-Completed Tasks 1-5 of 7. Ready to start Task 6 (LLM Switch + aggregation + Respond to Webhook for Workflow 2, Part C).
+Completed Tasks 1-6 of 7. Ready to start Task 7 (end-to-end test with all three blank ISQs).
 
-**Last commit:** `54c10f6` — "feat: AI agent with RAG tools for per-question answer generation"
+**Last commit:** `cfe3dca` — "feat: LLM switching, aggregation and webhook response"
 
 ---
 
@@ -50,18 +50,26 @@ Completed Tasks 1-5 of 7. Ready to start Task 6 (LLM Switch + aggregation + Resp
     - The AI Agent node needs **Settings → On Error: Continue** (not "Stop Workflow"), otherwise one failed tool call/max-iterations error aborts the entire batch instead of just that item.
     - The agent's JSON output sometimes returns `needs_review` as the *string* `"false"`/`"true"` instead of a real boolean — `"false"` is truthy in JS, which would silently break `Task 6`'s `needs_review_count` filter. **Fix:** added `parsed.needs_review = parsed.needs_review === true || parsed.needs_review === 'true';` in the parse Code node (`format_response`) right after the JSON.parse.
     - The `format_response` Code node must be in **"Run Once for Each Item"** mode (it uses `$input.item`, singular) and must `return { json: {...} }` directly — **not** wrapped in an array — since arrays aren't valid returns in that mode.
-    - The AI Agent node, like other nodes in this project, drops the original `question` field from the item. Fixed in `format_response` by referencing the Task 4 question node by name: `const question = $('get_questions').item.json.question || '';` (adjust the name if you renamed that node differently).
+    - The AI Agent node, like other nodes in this project, drops the original `question` field from the item. Initially fixed in `format_response` by referencing the Task 4 question node by name (`$('get_questions').item.json.question`), but this approach was later found to be fundamentally broken — see Task 6 notes below for the real fix (have the model echo the question back in its JSON output instead).
     - **Known limitation (not fixed, documented instead):** a full 24-question batch run against llama3.2 failed on every single item (all fell back to low-confidence/needs_review) despite the same setup succeeding cleanly in isolation moments earlier. Root cause investigated and traced to **severe host memory pressure** — `vm.swapusage` showed ~8GB/9GB swap in use on a 16GB Mac while Docker (n8n) + Ollama were both active. This is a hardware/resource constraint of the demo machine under sustained sequential LLM load, not a workflow logic bug — the graceful-degradation behavior (low confidence + needs_review) worked exactly as designed. If full-batch reliability matters for the demo, either free up system memory beforehand, or switch `llm_provider` to `anthropic` (Task 6) for the full run, since Claude doesn't share this local resource contention.
+- **Task 6 (Workflow 2 Part C — LLM Switch + Aggregation + Response):** COMPLETE
+  - `workflows/02-isq-processing.json` committed (node names: `Switch`, `ollama agent` / `Anthropic Agent`, `Anthropic Chat Model`, `format_response` / `format_response_anthropic`, `Merge`, aggregation `Code in JavaScript`)
+  - Single pinned-question test passed end-to-end through the full pipeline, including the final aggregated JSON response shape (`processed_at`, `total_questions`, `needs_review_count`, `answers[]`)
+  - Anthropic credential (`Anthropic Claude`) added via n8n's Credentials section (not under the gear/Settings menu in this n8n version — it's a separate left-nav item)
+  - **Deviations / gotchas from original plan:**
+    - Sub-nodes (Embeddings, Chat Models, and even Vector Store Tools) can be **reused/fanned out** to multiple consumers — e.g. one `Embeddings Ollama` node feeding both vector stores, or the same `search_policies`/`search_previous_isqs` tool nodes connected to both the Ollama and Anthropic AI Agents. No need to duplicate them per agent.
+    - Initially connected both AI Agents' outputs directly into one shared `format_response` Code node (skipping a dedicated Anthropic parse node + Merge) since it's "just a connection" — this works for simple cases but turned out to be the wrong call here (see pairedItem bug below). Reverted to two separate parse nodes (`format_response`, `format_response_anthropic`) feeding into a proper **Merge** node (Append mode) before aggregation, matching the original plan.
+    - **Major bug, found and fixed:** `$('get_questions').item.json.question` (and even `$('get_questions').all()[$itemIndex].json.question`) consistently threw `Cannot read properties of undefined (reading 'pairedItem')` in the parse Code nodes. Root cause: AI Agent (LangChain) nodes don't reliably preserve n8n's internal pairedItem lineage metadata on their output items, so anything relying on that lineage (cross-node `.item` lookups, `$itemIndex`) breaks downstream of an AI Agent, especially with a Switch upstream. **This is not a multi-input-node issue** — it persisted even with single, clean upstream connections. **Real fix:** stopped trying to recover the `question` field from elsewhere entirely. Instead, added `question` to the AI Agent's required JSON output schema (model echoes the exact question back as part of its structured answer), and simplified both parse nodes to just read `parsed.question` directly from the model's own output — no cross-node references needed. This sidesteps n8n's pairedItem system entirely.
+    - **Anthropic rate limits on batch runs:** testing the Anthropic path with even 5 pinned questions (not the full 24) hit "max iterations reached" — investigating via the Logs tab traced it to Anthropic's per-account rate limit (30,000 input tokens/minute on this tier), since each agentic call's growing context (system prompt + multi-turn tool results) adds up quickly across several sequential calls with no delay between them. Single-question tests work reliably and cheaply (fractions of a penny, seconds). **Decision: documented as a known limitation, not fixed** — a production fix would mean adding a Wait/throttle node between items on the Anthropic path, or upgrading the Anthropic usage tier. Be deliberate about cost when testing the Anthropic path with more than 1-2 pinned questions — a real full-batch run can cost real money (~£1) and take ~20 minutes once rate-limited retries kick in.
+    - Format_response's `try/catch` only catches JSON-parsing failures, not hard node-execution errors (e.g. max-iterations) further upstream — those need `Continue On Fail` set on the AI Agent node itself (done in Task 5) to avoid aborting the whole batch.
 
 ---
 
 ## What's Next
 
-Pick up at **Task 6** in `docs/superpowers/plans/2026-06-17-isq-agent.md`.
+Pick up at **Task 7** in `docs/superpowers/plans/2026-06-17-isq-agent.md`: end-to-end test with all three blank ISQs.
 
-Task 6 extends `workflows/02-isq-processing.json` (subagent-driven):
-- **Task 6:** Add LLM Switch + aggregation + response to `workflows/02-isq-processing.json` (Part C)
-- **Task 7:** End-to-end test with all three blank ISQs
+**Before running full-batch tests:** re-run Workflow 1 first if n8n/Docker has restarted (in-memory vector stores clear on restart). Be cost-aware with the Anthropic path — keep `llm_provider` on `ollama` for routine full-document tests, and only switch to `anthropic` deliberately, ideally with a small pinned subset rather than the full ~20-24 questions, given the rate-limit/cost findings above.
 
 ---
 
