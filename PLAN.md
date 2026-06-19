@@ -1,12 +1,28 @@
 This file is going to be the plan for the project.
 
-## Status: In Progress (paused 2026-06-19)
+## Status: Stopped for submission (2026-06-19)
 
 ### Where We Left Off
 
-Completed Tasks 1-6 of 7. Ready to start Task 7 (end-to-end test with all three blank ISQs).
+Tasks 1-6 of 7 fully complete and committed. Task 7 (end-to-end test with all three blank ISQs) was started but not finished — see below.
 
-**Last commit:** `cfe3dca` — "feat: LLM switching, aggregation and webhook response"
+**Last commit:** `d591c19` — "docs: update plan with Task 6 learnings, bugs found and fixed, and Anthropic rate-limit findings"
+
+### Task 7 status
+
+- Re-ran Workflow 1 successfully (55 chunks → `policy_store`, 25 chunks → `isq_store`)
+- Published Workflow 2 (production webhook live at `/webhook/isq`)
+- Ran the full Sunflowers Charity ISQ (24 questions) against the production webhook twice:
+  - First run: cancelled manually after noticing `llm_provider` was still set to `anthropic` from earlier testing (avoided an unbudgeted ~£1/~20min Anthropic batch run hitting the known rate-limit issue)
+  - Second run (after switching back to `ollama` and republishing): completed (HTTP 200) but **every one of the 24 items failed** to produce a real answer — all fell back to the low-confidence/needs_review/empty-answer state
+  - Root cause confirmed to be the same one identified in Task 5: host memory pressure. `vm.swapusage` showed ~8GB/9GB swap in use at the time of the failed run, same as the earlier full-batch failure
+- Did **not** complete: Blackridge Wind Energy ISQ test, confidence-flagging spot checks across a real run, or the optional Anthropic LLM-switch full-document test. Decided to stop here for submission rather than keep retrying under known resource constraints.
+
+### What a successful Task 7 run would need
+
+- Free up host memory before retrying (close other apps/browser tabs, confirm `vm.swapusage` is low) — the single-question and 1-2-question tests in Tasks 5/6 prove the pipeline logic itself is correct; the blocker is purely sustained local LLM throughput on this machine
+- Re-run with `llm_provider: ollama` for cost-free full-document testing; only use `anthropic` with 1-2 pinned questions at a time unless a Wait/throttle node is added to respect its rate limit
+- Once a clean full run succeeds, repeat with the Blackridge Wind Energy ISQ to confirm the response schema holds across documents, and spot-check that every `needs_review: true` answer has a non-null `reason`
 
 ---
 
